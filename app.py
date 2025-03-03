@@ -19,6 +19,11 @@ def asana_webhook():
         data = request.json
         print("Webhook Event Received:", data)
 
+        x_host_secret = request.headers.get('X-Host-Secret')  # Get the User-Agent header
+
+        print("X-Host-Secret is ", x_host_secret)
+
+
         # You can process specific event types here
         return jsonify({"status": "received"}), 200
 
