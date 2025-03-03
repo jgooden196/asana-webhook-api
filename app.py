@@ -1,20 +1,21 @@
 from flask import Flask, request, jsonify, Response
 import requests
 import datetime
+import os
 
 app = Flask(__name__)
 
-# ✅ Asana API Credentials (Replace these with your actual values)
-ASANA_ACCESS_TOKEN = "2/1204220771478700/1209548487495577:be3f4f050183a87e91bf18de543df9c5"
-PROJECT_ID = "1209353707682767"
-CALCULATED_TOTAL_SECTION_ID = "1209544289104123"
-BUDGET_CUSTOM_FIELD_ID = "1209353707682778"
-
-# ✅ Headers for Asana API requests
+# Set your Asana PAT and workspace details
+ASANA_PAT = "2/1204220771478700/1209548487495577:be3f4f050183a87e91bf18de543df9c5"
 HEADERS = {
-    "Authorization": f"Bearer {ASANA_ACCESS_TOKEN}",
+    "Authorization": f"Bearer {ASANA_PAT}",
     "Content-Type": "application/json"
 }
+
+# Project and section details
+PROJECT_ID = "1209353707682767"
+SECTION_ID = "1209544289104123"
+TRB_TASK_NAME_PREFIX = "TRB -"
 
 @app.route('/')
 def home():
@@ -22,100 +23,118 @@ def home():
 
 @app.route('/webhook', methods=['POST', 'GET'])
 def asana_webhook():
-    """Handles Asana webhook validation and task updates."""
     if request.method == 'GET':
+        # Asana webhook validation request
         challenge = request.args.get('challenge')
         if challenge:
-            print("✅ Webhook challenge received and acknowledged")
             return jsonify({'challenge': challenge})
 
     if request.method == 'POST':
+        # Log the webhook event data
         data = request.json
-        print("🔹 Webhook Event Received:", data)
+        print("Webhook Event Received:", data)
 
-        x_hook_secret = request.headers.get('X-Hook-Secret')
-        if x_hook_secret:
-            response = Response("Webhook received")
-            response.headers["X-Hook-Secret"] = x_hook_secret
-            return response
+        for event in data.get("events", []):
+            if event.get("resource", {}).get("resource_type") == "task" and event.get("action") == "changed":
+                task_id = event["resource"]["gid"]
+                handle_task_update(task_id)
 
-        # ✅ Log every event to ensure we are receiving updates
-        if "events" in data:
-            for event in data["events"]:
-                print(f"🟢 Event Detected: {event}")
-                if event["resource"]["resource_type"] == "task" and event["action"] == "changed":
-                    print("✅ Task Change Event - Processing...")
-                    handle_task_update(event["resource"]["gid"])
-
-        return jsonify({"status": "received"}), 200
+        return jsonify({"status": "processed"}), 200
 
 def handle_task_update(task_id):
-    """Processes an Asana task update event and recalculates the TRB."""
-    print(f"🔎 Checking Task ID: {task_id}")
+    """ Process the task update event to update the TRB task """
+    print(f"\n✅ Task Change Event - Processing Task ID: {task_id}")
 
-    # ✅ Get all tasks in the project
-    tasks = get_project_tasks(PROJECT_ID)
-
+    # Fetch all tasks in the project
+    tasks = get_project_tasks()
+    
     if not tasks:
-        print("❌ No tasks found in the project. Skipping TRB calculation.")
+        print("❌ No tasks found in the project.")
         return
 
-    # ✅ Calculate the total remaining budget
-    remaining_budget = calculate_remaining_budget(tasks)
+    # Calculate remaining budget
+    total_remaining_budget = calculate_remaining_budget(tasks)
+    formatted_budget = f"${total_remaining_budget:,.0f}"  # Add commas, remove decimals
 
-    # ✅ Create or update the TRB task
-    create_trb_task(remaining_budget)
+    print(f"✅ Total Remaining Budget Calculated: {formatted_budget}")
 
-def get_project_tasks(project_id):
-    """Fetches all tasks in the project."""
-    url = f"https://app.asana.com/api/1.0/projects/{project_id}/tasks?opt_fields=gid,name,completed,custom_fields"
+    # Find the TRB task
+    trb_task = find_trb_task(tasks)
+    
+    # Update or create the TRB task
+    update_trb_task(trb_task, formatted_budget)
+
+def get_project_tasks():
+    """ Retrieve all tasks from the project """
+    url = f"https://app.asana.com/api/1.0/projects/{PROJECT_ID}/tasks?opt_fields=name,completed,custom_fields"
     response = requests.get(url, headers=HEADERS)
-
+    
     if response.status_code == 200:
-        print("✅ Successfully fetched project tasks")
         return response.json().get("data", [])
     else:
-        print(f"❌ Error fetching tasks: {response.status_code}", response.json())
+        print(f"❌ Error fetching tasks: {response.json()}")
         return []
 
 def calculate_remaining_budget(tasks):
-    """Calculates the total remaining budget for incomplete tasks."""
+    """ Calculate total remaining budget from incomplete tasks """
     total_remaining_budget = 0
 
     for task in tasks:
-        if not task.get("completed"):  # ✅ Ignore completed tasks
-            custom_fields = task.get("custom_fields", [])
-            for field in custom_fields:
-                if field.get("gid") == BUDGET_CUSTOM_FIELD_ID:  # ✅ Match correct custom field
-                    value = field.get("number_value")
+        # Find the budget field in custom fields
+        budget_value = None
+        for field in task.get("custom_fields", []):
+            if field.get("gid") == "YOUR_BUDGET_FIELD_ID":
+                budget_value = field.get("number_value")
 
-                    if value is None:
-                        print(f"⚠️ Warning: Task '{task.get('name', 'Unknown Task')}' has no budget value. Skipping.")
-                        continue  # Skip tasks without a valid budget
-                    
-                    total_remaining_budget += float(value)
+        if budget_value is None:
+            print(f"⚠️ Warning: Task '{task['name']}' has no budget value. Skipping.")
+            continue
 
-    print(f"✅ Total Remaining Budget Calculated: ${total_remaining_budget:.2f}")
+        if not task["completed"]:
+            total_remaining_budget += budget_value
+
     return total_remaining_budget
 
-def create_trb_task(remaining_budget):
-    """Creates a new TRB task in the 'Calculated Total Updates' section."""
-    today = datetime.datetime.today().strftime("%Y-%m-%d")
-    task_name = f"TRB - {today} - ${remaining_budget:.2f}"
+def find_trb_task(tasks):
+    """ Find the TRB task in the section """
+    for task in tasks:
+        if task["name"].startswith(TRB_TASK_NAME_PREFIX):
+            return task  # Return the existing TRB task
+    return None
 
-    task_data = {
+def update_trb_task(trb_task, formatted_budget):
+    """ Update the existing TRB task with the latest budget and timestamp """
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    task_name = f"TRB - {timestamp} - {formatted_budget}"
+
+    if trb_task:
+        # Update existing TRB task
+        url = f"https://app.asana.com/api/1.0/tasks/{trb_task['gid']}"
+        response = requests.put(url, headers=HEADERS, json={"name": task_name})
+
+        if response.status_code == 200:
+            print(f"✅ TRB Task Updated: {task_name}")
+        else:
+            print(f"❌ Error updating TRB task: {response.json()}")
+    else:
+        # Create new TRB task if not found
+        create_trb_task(task_name)
+
+def create_trb_task(task_name):
+    """ Create a new TRB task in the designated section """
+    url = "https://app.asana.com/api/1.0/tasks"
+    payload = {
         "name": task_name,
         "projects": [PROJECT_ID],
-        "memberships": [{"project": PROJECT_ID, "section": CALCULATED_TOTAL_SECTION_ID}]
+        "section": SECTION_ID
     }
-
-    url = "https://app.asana.com/api/1.0/tasks"
-    response = requests.post(url, json={"data": task_data}, headers=HEADERS)
+    response = requests.post(url, headers=HEADERS, json=payload)
 
     if response.status_code == 201:
         print(f"✅ TRB Task Created: {task_name}")
     else:
-        print(f"❌ Error Creating TRB Task: {response.status_code}", response.json())
+        print(f"❌ Error creating TRB task: {response.json()}")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=8080)
