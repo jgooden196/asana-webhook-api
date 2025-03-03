@@ -5,11 +5,14 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# Asana API Token and Resource IDs
-ASANA_API_TOKEN = os.getenv("2/1204220771478700/1209557208654124:14e1caffe986d2899907f8fabb501f14")
-ASANA_PROJECT_ID = os.getenv("1209353707682767")
-ASANA_SECTION_ID = os.getenv("1209544289104123")
-ASANA_BUDGET_FIELD_ID = os.getenv("1209353707682778")
+# Load Asana API Token and Resource IDs
+ASANA_API_TOKEN = os.getenv("ASANA_API_TOKEN")
+ASANA_PROJECT_ID = os.getenv("ASANA_PROJECT_ID")
+ASANA_SECTION_ID = os.getenv("ASANA_SECTION_ID")
+ASANA_BUDGET_FIELD_ID = os.getenv("ASANA_BUDGET_FIELD_ID")
+
+# Debugging: Print API token to logs (do not use in production)
+print(f"DEBUG: Loaded Asana API Token: {ASANA_API_TOKEN}")
 
 # Headers for Asana API requests
 HEADERS = {
@@ -65,7 +68,7 @@ def handle_task_update(task_id):
 def fetch_project_tasks():
     url = f"https://app.asana.com/api/1.0/projects/{ASANA_PROJECT_ID}/tasks?opt_fields=gid,name,completed,custom_fields"
     
-    # **Log Headers Before Request**
+    # Debugging: Print Headers Before Request
     print("🔹 Fetching project tasks with headers:", HEADERS)
 
     response = requests.get(url, headers=HEADERS)
@@ -100,7 +103,7 @@ def update_trb_task(remaining_budget):
     url = f"https://app.asana.com/api/1.0/tasks"
     headers = HEADERS
 
-    # **Log Headers Before Request**
+    # Debugging: Print Headers Before Request
     print("🔹 Updating TRB Task with headers:", headers)
 
     # Fetch existing TRB task
