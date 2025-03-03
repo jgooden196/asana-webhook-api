@@ -6,10 +6,10 @@ from datetime import datetime
 app = Flask(__name__)
 
 # Load Asana API Token and Resource IDs
-ASANA_API_TOKEN = os.getenv("ASANA_API_TOKEN")
-ASANA_PROJECT_ID = os.getenv("ASANA_PROJECT_ID")
-ASANA_SECTION_ID = os.getenv("ASANA_SECTION_ID")
-ASANA_BUDGET_FIELD_ID = os.getenv("ASANA_BUDGET_FIELD_ID")
+ASANA_API_TOKEN = os.getenv("2/1204220771478700/1209557208654124:14e1caffe986d2899907f8fabb501f14")
+ASANA_PROJECT_ID = os.getenv("1209353707682767")
+ASANA_SECTION_ID = os.getenv("1209544289104123")
+ASANA_BUDGET_FIELD_ID = os.getenv("1209353707682778")
 
 # Debugging: Print API token to logs (do not use in production)
 print(f"DEBUG: Loaded Asana API Token: {ASANA_API_TOKEN}")
@@ -83,6 +83,7 @@ def fetch_project_tasks():
 def calculate_remaining_budget(tasks):
     total_remaining_budget = 0
 
+    print("🔹 Calculating Remaining Budget...")
     for task in tasks:
         if task.get("completed"):
             continue  # Skip completed tasks
@@ -92,11 +93,14 @@ def calculate_remaining_budget(tasks):
             if field["gid"] == ASANA_BUDGET_FIELD_ID:
                 budget_value = field.get("number_value")
 
+        print(f"🔹 Task: {task.get('name')} | Budget Value: {budget_value}")
+
         if budget_value is not None:
             total_remaining_budget += budget_value
         else:
             print(f"⚠️ Warning: Task '{task.get('name')}' has no budget value. Skipping.")
 
+    print(f"✅ Final Calculated Remaining Budget: ${total_remaining_budget:,}")
     return total_remaining_budget
 
 def update_trb_task(remaining_budget):
@@ -114,7 +118,7 @@ def update_trb_task(remaining_budget):
             trb_task = task
             break
 
-    trb_name = f"TRB - {datetime.now().strftime('%Y-%m-%d')} - ${remaining_budget:,}"
+    trb_name = f"TRB - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - ${remaining_budget:,}"
 
     if trb_task:
         trb_task_id = trb_task["gid"]
