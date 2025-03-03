@@ -6,7 +6,7 @@ from datetime import datetime
 app = Flask(__name__)
 
 # Asana API Setup
-ASANA_TOKEN = os.getenv("2/1204220771478700/1209548487495577:be3f4f050183a87e91bf18de543df9c5")  # Ensure you have set this in Railway environment variables
+ASANA_TOKEN = os.getenv("2/1204220771478700/1209557208654124:14e1caffe986d2899907f8fabb501f14")  # Ensure you have set this in Railway environment variables
 PROJECT_ID = "1209353707682767"  # Replace with your actual Asana project ID
 SECTION_ID = "1209544289104123"  # Replace with your actual Asana section ID
 BUDGET_FIELD_ID = "1209353707682778"  # Replace with your actual budget field ID
