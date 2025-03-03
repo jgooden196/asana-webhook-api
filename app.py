@@ -4,7 +4,7 @@ import datetime
 
 app = Flask(__name__)
 
-# ✅ Asana API Credentials
+# ✅ Asana API Credentials (Replace these with your actual values)
 ASANA_ACCESS_TOKEN = "2/1204220771478700/1209548487495577:be3f4f050183a87e91bf18de543df9c5"
 PROJECT_ID = "1209353707682767"
 CALCULATED_TOTAL_SECTION_ID = "1209544289104123"
@@ -26,11 +26,12 @@ def asana_webhook():
     if request.method == 'GET':
         challenge = request.args.get('challenge')
         if challenge:
+            print("✅ Webhook challenge received and acknowledged")
             return jsonify({'challenge': challenge})
 
     if request.method == 'POST':
         data = request.json
-        print("Webhook Event Received:", data)
+        print("🔹 Webhook Event Received:", data)
 
         x_hook_secret = request.headers.get('X-Hook-Secret')
         if x_hook_secret:
@@ -38,23 +39,25 @@ def asana_webhook():
             response.headers["X-Hook-Secret"] = x_hook_secret
             return response
 
-        # ✅ Process Task Updates
+        # ✅ Log every event to ensure we are receiving updates
         if "events" in data:
             for event in data["events"]:
+                print(f"🟢 Event Detected: {event}")
                 if event["resource"]["resource_type"] == "task" and event["action"] == "changed":
+                    print("✅ Task Change Event - Processing...")
                     handle_task_update(event["resource"]["gid"])
 
         return jsonify({"status": "received"}), 200
 
 def handle_task_update(task_id):
     """Processes an Asana task update event and recalculates the TRB."""
-    print(f"Processing task update for Task ID: {task_id}")
+    print(f"🔎 Checking Task ID: {task_id}")
 
     # ✅ Get all tasks in the project
     tasks = get_project_tasks(PROJECT_ID)
 
     if not tasks:
-        print("❌ No tasks found. Skipping TRB calculation.")
+        print("❌ No tasks found in the project. Skipping TRB calculation.")
         return
 
     # ✅ Calculate the total remaining budget
@@ -69,6 +72,7 @@ def get_project_tasks(project_id):
     response = requests.get(url, headers=HEADERS)
 
     if response.status_code == 200:
+        print("✅ Successfully fetched project tasks")
         return response.json().get("data", [])
     else:
         print(f"❌ Error fetching tasks: {response.status_code}", response.json())
@@ -83,10 +87,15 @@ def calculate_remaining_budget(tasks):
             custom_fields = task.get("custom_fields", [])
             for field in custom_fields:
                 if field.get("gid") == BUDGET_CUSTOM_FIELD_ID:  # ✅ Match correct custom field
-                    value = field.get("number_value", 0)
+                    value = field.get("number_value")
+
+                    if value is None:
+                        print(f"⚠️ Warning: Task '{task.get('name', 'Unknown Task')}' has no budget value. Skipping.")
+                        continue  # Skip tasks without a valid budget
+                    
                     total_remaining_budget += float(value)
-    
-    print(f"✅ Total Remaining Budget: ${total_remaining_budget:.2f}")
+
+    print(f"✅ Total Remaining Budget Calculated: ${total_remaining_budget:.2f}")
     return total_remaining_budget
 
 def create_trb_task(remaining_budget):
