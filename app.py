@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, response
 
 app = Flask(__name__)
 
@@ -21,11 +21,14 @@ def asana_webhook():
 
         x_host_secret = request.headers.get('X-Host-Secret')  # Get the User-Agent header
 
+        response = Response("This is a custom response:" + x_host_secret )
+        response.headers["X-Host-Secret"] = x_host_secret
+
         print("X-Host-Secret is ", x_host_secret)
 
 
         # You can process specific event types here
-        return jsonify({"status": "received"}), 200
+        return response
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
